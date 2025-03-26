@@ -1,5 +1,6 @@
 /* Global styles */
-body, html {
+body,
+html {
     margin: 0;
     padding: 0;
     overflow: hidden;
@@ -18,9 +19,28 @@ body, html {
     border-radius: 5px;
 }
 
-/* AR Container fills the screen */
+/* AR Container */
 #arContainer {
     width: 100vw;
     height: 100vh;
     position: relative;
+}
+
+/* Fallback message styling */
+#fallback {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: 20;
+    background: #fff;
+    color: #333;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+}
+.hidden {
+    display: none;
 }

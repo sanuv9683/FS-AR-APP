@@ -2,7 +2,7 @@
 import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.module.js';
 import { ARButton } from 'https://cdn.jsdelivr.net/npm/three@0.128.0/examples/jsm/webxr/ARButton.js';
 
-// Lookup table: Maps ceiling height (ft) to FoV width and length (in meters)
+/* 1. FoV Lookup Table (ceiling height in ft => coverage in meters) */
 const fovTable = [
     { ceiling: 7.5, width: 2.35, length: 2.90 },
     { ceiling: 8.0, width: 2.50, length: 3.00 },
@@ -16,15 +16,90 @@ const fovTable = [
     { ceiling: 14.0, width: 4.51, length: 5.64 }
 ];
 
-// Global variables
-let camera, scene, renderer, sensorCoverage;
-let controller;
+/* 2. Variables for Three.js Scene */
+let camera, scene, renderer;
+let sensorCoverage;
+let controller; // for user taps in AR
 
-// Returns the closest matching FoV data for the entered ceiling height
+/* 3. Check AR Support Before Initializing */
+const fallbackDiv = document.getElementById('fallback');
+if ('xr' in navigator) {
+    navigator.xr.isSessionSupported('immersive-ar').then((supported) => {
+        if (supported) {
+            initAR(); // proceed with AR setup
+        } else {
+            showFallback();
+        }
+    });
+} else {
+    showFallback();
+}
+
+function showFallback() {
+    fallbackDiv.classList.remove('hidden');
+}
+
+/* 4. AR Initialization */
+function initAR() {
+    const container = document.getElementById('arContainer');
+
+    // Create scene & camera
+    scene = new THREE.Scene();
+    camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
+
+    // Create renderer
+    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+    renderer.setPixelRatio(window.devicePixelRatio);
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.xr.enabled = true;
+    container.appendChild(renderer.domElement);
+
+    // Add AR button to enter AR mode
+    document.body.appendChild(
+        ARButton.createButton(renderer, {
+            requiredFeatures: ['hit-test'] // or remove if you don't need hit-test
+        })
+    );
+
+    // Add a basic light
+    const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
+    light.position.set(0.5, 1, 0.25);
+    scene.add(light);
+
+    // Create default coverage shape
+    const defaultCeiling = 10.0;
+    const defaultData = getCeilingData(defaultCeiling);
+    sensorCoverage = createCoverageShape(defaultCeiling, defaultData.width, defaultData.length);
+    // Place it 2 meters in front of the camera initially
+    sensorCoverage.position.set(0, 0, -2);
+    scene.add(sensorCoverage);
+
+    // Set up AR controller for user taps (to reposition coverage if needed)
+    controller = renderer.xr.getController(0);
+    controller.addEventListener('select', onSelect);
+    scene.add(controller);
+
+    // Handle window resize
+    window.addEventListener('resize', onWindowResize, false);
+
+    // Handle coverage updates from UI
+    document.getElementById('updateCoverage').addEventListener('click', () => {
+        const val = parseFloat(document.getElementById('ceilingHeightInput').value);
+        if (isNaN(val)) {
+            alert("Please enter a valid ceiling height.");
+            return;
+        }
+        updateCoverageArea(val);
+    });
+
+    animate();
+}
+
+/* 5. Coverage Table & Shape */
 function getCeilingData(ceilingHeightFt) {
     let closest = null;
     let minDiff = Infinity;
-    fovTable.forEach(data => {
+    fovTable.forEach((data) => {
         const diff = Math.abs(data.ceiling - ceilingHeightFt);
         if (diff < minDiff) {
             minDiff = diff;
@@ -34,117 +109,67 @@ function getCeilingData(ceilingHeightFt) {
     return closest;
 }
 
-// Create the sensor coverage shape as a cone. In this model, the cone's tip is the sensor mount.
-function createCoverageShape(ceilingHeight, fovWidth, fovLength) {
-    const height = ceilingHeight; // Assume the same unit (ft) for simplicity.
-    const radius = fovWidth / 2;
+function createCoverageShape(ceilingFt, fovWidthM, fovLengthM) {
+    // For simplicity, use 'ceilingFt' as the cone height in ft.
+    // Convert if you want a more realistic scale in meters.
+    const height = ceilingFt;
+    const radius = fovWidthM / 2;
+
     const geometry = new THREE.ConeGeometry(radius, height, 32, 1, true);
     const material = new THREE.MeshBasicMaterial({
         color: 0x00ff00,
         opacity: 0.5,
-        transparent: true,
-        wireframe: false
+        transparent: true
     });
     const cone = new THREE.Mesh(geometry, material);
-    // Shift the cone so that its tip (sensor) is at the origin.
+
+    // Shift so the tip is at the origin
     cone.position.y = -height / 2;
     return cone;
 }
 
-// Update the sensor coverage object when the user changes the ceiling height.
 function updateCoverageArea(ceilingHeightFt) {
-    const ceilingData = getCeilingData(ceilingHeightFt);
-    if (!ceilingData) {
-        alert("Ceiling height not available in table. Please enter a valid value.");
+    const data = getCeilingData(ceilingHeightFt);
+    if (!data) {
+        alert("No matching data found for that height.");
         return;
     }
-    // Remove the old sensor coverage shape from the scene.
+    // Remove old coverage
     if (sensorCoverage) scene.remove(sensorCoverage);
-    sensorCoverage = createCoverageShape(ceilingHeightFt, ceilingData.width, ceilingData.length);
-    // Place the sensor coverage 2 meters in front of the camera (or update based on hit test)
+
+    sensorCoverage = createCoverageShape(ceilingHeightFt, data.width, data.length);
+    // Keep it in front of the camera
     sensorCoverage.position.set(0, 0, -2);
     scene.add(sensorCoverage);
 }
 
-// Initialize the AR scene.
-function init() {
-    const container = document.getElementById('arContainer');
-
-    // Set up scene and camera.
-    scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.01, 20);
-
-    // Set up renderer with WebXR enabled.
-    renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-    renderer.setPixelRatio(window.devicePixelRatio);
-    renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.xr.enabled = true;
-    container.appendChild(renderer.domElement);
-
-    // Add the AR button to enter AR mode.
-    document.body.appendChild(ARButton.createButton(renderer, { requiredFeatures: ['hit-test'] }));
-
-    // Add basic lighting.
-    const light = new THREE.HemisphereLight(0xffffff, 0xbbbbff, 1);
-    light.position.set(0.5, 1, 0.25);
-    scene.add(light);
-
-    // Create the default sensor coverage shape using a default ceiling height (10 ft).
-    const defaultCeiling = 10.0;
-    const defaultData = getCeilingData(defaultCeiling);
-    sensorCoverage = createCoverageShape(defaultCeiling, defaultData.width, defaultData.length);
-    // Initially position the sensor coverage 2 meters in front of the camera.
-    sensorCoverage.position.set(0, 0, -2);
-    scene.add(sensorCoverage);
-
-    // Set up a controller for tap interaction (to reposition the sensor coverage).
-    controller = renderer.xr.getController(0);
-    controller.addEventListener('select', onSelect);
-    scene.add(controller);
-
-    // Handle window resizing.
-    window.addEventListener('resize', onWindowResize, false);
-
-    // Update coverage shape on ceiling height change.
-    document.getElementById('updateCoverage').addEventListener('click', () => {
-        const ceilingHeightFt = parseFloat(document.getElementById('ceilingHeightInput').value);
-        if (isNaN(ceilingHeightFt)) {
-            alert("Please enter a valid ceiling height.");
-            return;
-        }
-        updateCoverageArea(ceilingHeightFt);
-    });
-}
-
-// When the user taps the screen, update the sensor coverage placement.
-// (In a production app you’d use AR hit testing to anchor the object to a real-world surface.)
+/* 6. User Tap: Reposition coverage (basic example) */
 function onSelect() {
-    // For this demo, simply reposition the sensor coverage 2 meters forward.
+    if (!sensorCoverage) return;
+    // In a production app, you'd do a real AR hit test here.
+    // For demonstration, just reset it 2 meters ahead again.
     sensorCoverage.position.set(0, 0, -2);
 }
 
-// Adjust camera and renderer on window resize.
+/* 7. Resize Handler */
 function onWindowResize() {
     camera.aspect = window.innerWidth / window.innerHeight;
     camera.updateProjectionMatrix();
     renderer.setSize(window.innerWidth, window.innerHeight);
 }
 
-// Animation loop: WebXR will update the camera view in real time.
-// We also adjust the sensor coverage scale based on its distance from the camera.
-function render() {
-    // Calculate distance between sensorCoverage and camera.
-    const distance = sensorCoverage.position.distanceTo(camera.position);
-    // For example, use a scaling factor that is proportional to the distance.
-    const scaleFactor = distance / 2; // Adjust this factor to fine-tune the effect.
-    sensorCoverage.scale.set(scaleFactor, scaleFactor, scaleFactor);
-
-    renderer.render(scene, camera);
-}
-
+/* 8. Animation & Render Loop */
 function animate() {
     renderer.setAnimationLoop(render);
 }
 
-init();
-animate();
+function render() {
+    // Scale coverage based on distance from camera for a "try-on" effect
+    if (sensorCoverage) {
+        const dist = sensorCoverage.position.distanceTo(camera.position);
+        const scaleFactor = dist / 2; // Tweak this factor as needed
+        sensorCoverage.scale.set(scaleFactor, scaleFactor, scaleFactor);
+    }
+
+    renderer.render(scene, camera);
+}

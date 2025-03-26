@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <title>Sensor Coverage AR Visualizer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 <!-- UI Controls -->
@@ -20,10 +20,16 @@
   <button id="updateCoverage">Update Coverage</button>
 </div>
 
-<!-- Container for AR (the AR camera feed will automatically be provided) -->
+<!-- AR container (the AR camera feed and 3D overlay will appear here) -->
 <div id="arContainer"></div>
 
-<!-- Load our AR app (which uses modules) -->
+<!-- Fallback message if AR is not supported -->
+<div id="fallback" class="hidden">
+  <h2>AR Not Supported</h2>
+  <p>Your device/browser does not support WebXR AR. Please try on a compatible mobile device or use HTTPS.</p>
+</div>
+
+<!-- Our AR app script (ES module) -->
 <script type="module" src="arApp.js"></script>
 </body>
 </html>
