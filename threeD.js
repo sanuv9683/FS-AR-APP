@@ -145,6 +145,6 @@ function animate() {
 // Initialize Three.js when the DOM is ready.
 document.addEventListener("DOMContentLoaded", initThreeJS);
 
-// Expose functions so that app.js can call them.
+// Expose functions so that arApp.js can call them.
 window.updateCoverageArea = updateCoverageArea;
 window.updateSensorPositionInThreeD = updateSensorPositionInThreeD;
