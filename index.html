@@ -4,7 +4,7 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Sensor Coverage Visualizer</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
 <!-- UI Controls -->
@@ -17,15 +17,13 @@
   <button id="updateCoverage">Update Coverage</button>
 </div>
 
-<!-- Camera Feed Container -->
+<!-- Container for both live camera feed and 3D overlay -->
 <div id="cameraContainer">
-  <video id="cameraFeed" autoplay playsinline></video>
+  <video id="cameraFeed" autoplay playsinline muted></video>
+  <!-- The Three.js renderer canvas will be injected here -->
 </div>
 
-<!-- 3D Rendering Container -->
-<div id="threeDContainer"></div>
-
-<!-- Three.js library from a CDN -->
+<!-- Three.js library from CDN -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <!-- Our modular scripts -->
 <script src="threeD.js"></script>
