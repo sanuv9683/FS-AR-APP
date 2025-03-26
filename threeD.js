@@ -24,18 +24,17 @@ function initThreeJS() {
     const container = document.getElementById('cameraContainer');
     scene = new THREE.Scene();
 
-    // Set up perspective camera
+    // Set up perspective camera.
+    // (In this demo, we position the camera at a default location.)
     camera = new THREE.PerspectiveCamera(75, container.clientWidth / container.clientHeight, 0.1, 1000);
-    // Position the camera so that (0,0,0) is at the sensor (ceiling mount)
     camera.position.set(0, 5, 10);
 
-    // Set up WebGL renderer; its canvas overlays the video
+    // Set up WebGL renderer with alpha so that it overlays transparently over the video.
     renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
     renderer.setSize(container.clientWidth, container.clientHeight);
-    // Ensure the canvas is absolutely positioned (CSS already does this)
     container.appendChild(renderer.domElement);
 
-    // Add lights
+    // Add lighting to the scene.
     const ambientLight = new THREE.AmbientLight(0xffffff, 0.5);
     scene.add(ambientLight);
     const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
@@ -44,18 +43,23 @@ function initThreeJS() {
 
     // Create an initial sensor coverage shape (default: 10 ft ceiling)
     sensorCoverage = createCoverageShape(10.0, 3.05, 3.75);
-    // Initially position the coverage shape at the center
+    // Position the sensor coverage based on any tapped offset (initially centered).
     sensorCoverage.position.x = sensorOffset.x;
     sensorCoverage.position.y = sensorOffset.y;
     scene.add(sensorCoverage);
 
+    // Optionally, update camera orientation based on device movement.
+    if (window.DeviceOrientationEvent) {
+        window.addEventListener("deviceorientation", handleDeviceOrientation, true);
+    }
+
     animate();
 }
 
-// Create (or recreate) a sensor coverage shape as a cone.
-// The cone’s height is the ceiling height (in meters) and its base radius is derived from FoV width.
+// Create a sensor coverage shape as a cone.
+// The cone’s height is the ceiling height (in ft) and its base radius comes from the FoV width.
 function createCoverageShape(ceilingHeight, fovWidth, fovLength) {
-    const height = ceilingHeight; // using ft for simplicity; conversion can be added if needed.
+    const height = ceilingHeight; // Using ft for simplicity (add conversion if needed).
     const radius = fovWidth / 2;
     const geometry = new THREE.ConeGeometry(radius, height, 32, 1, true);
     const material = new THREE.MeshBasicMaterial({
@@ -65,30 +69,29 @@ function createCoverageShape(ceilingHeight, fovWidth, fovLength) {
         wireframe: false
     });
     const cone = new THREE.Mesh(geometry, material);
-    // Shift the cone so its tip (sensor location) is at y=0.
+    // Shift the cone so that its tip (sensor mount) is at y = 0.
     cone.position.y = -height / 2;
     return cone;
 }
 
-// Update the 3D coverage area based on the user-entered ceiling height (in ft)
+// Update the 3D coverage area when the ceiling height is changed.
 function updateCoverageArea(ceilingHeightFt) {
     const ceilingData = getCeilingData(ceilingHeightFt);
     if (!ceilingData) {
         alert("Ceiling height not available in table. Please enter a valid value.");
         return;
     }
-
     if (sensorCoverage) {
         scene.remove(sensorCoverage);
     }
     sensorCoverage = createCoverageShape(ceilingHeightFt, ceilingData.width, ceilingData.length);
-    // Reapply sensor offset so that the shape overlays at the tapped position
+    // Reapply sensor offset so that the shape remains aligned with the tap position.
     sensorCoverage.position.x = sensorOffset.x;
     sensorCoverage.position.y = sensorOffset.y;
     scene.add(sensorCoverage);
 }
 
-// Get the closest matching FoV data for a given ceiling height (ft)
+// Find the closest FoV data based on a given ceiling height (ft).
 function getCeilingData(ceilingHeightFt) {
     let closest = null;
     let minDiff = Infinity;
@@ -102,27 +105,46 @@ function getCeilingData(ceilingHeightFt) {
     return closest;
 }
 
-// Update the sensor’s 3D coverage overlay position based on normalized coordinates (range -1 to 1).
-// Here we simply map the normalized coordinates to a translation in the scene.
+// Update the sensor’s overlay position based on normalized coordinates (range -1 to 1).
 function updateSensorPositionInThreeD(normX, normY) {
     sensorOffset.set(normX, normY);
     if (sensorCoverage) {
-        // For demonstration, we map normalized coordinates to a small offset.
-        // In a real AR scenario, you would unproject these into 3D space.
-        sensorCoverage.position.x = normX * 5; // scaling factor (adjust as needed)
+        // Map normalized coordinates to scene space.
+        // Here a scaling factor of 5 is applied (adjust as needed).
+        sensorCoverage.position.x = normX * 5;
         sensorCoverage.position.y = normY * 5;
     }
 }
 
-// Animation loop for rendering
+// Handle device orientation events to update camera rotation.
+function handleDeviceOrientation(event) {
+    // Basic mapping of device orientation to camera rotation.
+    // Note: For production apps, consider using DeviceOrientationControls.
+    if (event.alpha !== null && event.beta !== null && event.gamma !== null) {
+        camera.rotation.y = THREE.Math.degToRad(event.alpha);
+        camera.rotation.x = THREE.Math.degToRad(event.beta);
+        camera.rotation.z = THREE.Math.degToRad(event.gamma);
+    }
+}
+
+// Animation loop: update the renderer and adjust the sensor drawing scale based on camera distance.
 function animate() {
     requestAnimationFrame(animate);
+
+    // Adjust the scale of sensorCoverage relative to the camera's distance.
+    // Here we assume that when the camera is at distance 10, scale is 1.
+    if (sensorCoverage) {
+        const sensorPos = new THREE.Vector3(sensorCoverage.position.x, sensorCoverage.position.y, 0);
+        const dist = camera.position.distanceTo(sensorPos);
+        const scaleFactor = dist / 10; // Modify this factor as needed.
+        sensorCoverage.scale.set(scaleFactor, scaleFactor, scaleFactor);
+    }
     renderer.render(scene, camera);
 }
 
-// Initialize Three.js when DOM is ready
+// Initialize Three.js when the DOM is ready.
 document.addEventListener("DOMContentLoaded", initThreeJS);
 
-// Expose functions for app.js to call
+// Expose functions so that app.js can call them.
 window.updateCoverageArea = updateCoverageArea;
 window.updateSensorPositionInThreeD = updateSensorPositionInThreeD;
